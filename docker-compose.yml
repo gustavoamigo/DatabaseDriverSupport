@@ -1,0 +1,39 @@
+postgres:
+  image: postgres
+  ports:
+    - "15432:5432"
+  environment:
+    - POSTGRES_USER=postgres
+
+
+mysql:
+  image: mysql
+  ports:
+    - "13306:3306"
+  environment:
+    - MYSQL_ROOT_PASSWORD=root
+    - MYSQL_DATABASE=quill_test
+    - MYSQL_ALLOW_EMPTY_PASSWORD=yes
+
+setup:
+  build: .
+  dockerfile: Dockerfile-setup
+  links:
+    - postgres:postgres
+    - mysql:mysql
+  volumes:
+    - ./:/app
+  command:
+    - ./setup.sh
+  working_dir: /app
+
+sbt:
+  image: 1science/sbt:0.13.8-oracle-jre-8
+  command: sbt
+  links:
+    - postgres:postgres
+    - mysql:mysql
+  volumes:
+    - ./:/app
+    - ~/.ivy2:/root/.ivy2
+    - ~/.m2:/root/.m2
