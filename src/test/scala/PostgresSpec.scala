@@ -1,9 +1,16 @@
 import java.sql._
+import org.joda.time.LocalDateTime
 
+import scala.concurrent.Await
+import scala.concurrent.duration._
 import scala.util.Random
 
 import org.postgresql.ds.{ PGSimpleDataSource }
 import org.scalatest.{ FreeSpec, MustMatchers }
+
+import com.github.mauricio.async.db.mysql.MySQLConnection
+import com.github.mauricio.async.db.postgresql.PostgreSQLConnection
+import com.github.mauricio.async.db.{ Connection, Configuration }
 
 class PostgresSpec extends FreeSpec with MustMatchers {
   "Postgres" - {
@@ -82,7 +89,53 @@ class PostgresSpec extends FreeSpec with MustMatchers {
         val otherNameFromQuery = result.getString("othername")
         otherNameFromQuery mustBe otherName
       }
+    }
 
+    "Postgres-async" - {
+      "Bigserial" - {
+        val configuration = new Configuration("postgres", "postgres", 5432, None, Some("quill_test"))
+        val connection: Connection = new PostgreSQLConnection(configuration)
+        Await.result(connection.connect, 5 seconds)
+        val randomName = Random.nextLong().toString
+        val result1 =  Await.result(connection.sendPreparedStatement("INSERT INTO test1 (name) VALUES(?) RETURNING ID", List(randomName)), 5 seconds)
+        result1.rows mustNot be(None)
+        val generatedId = result1.rows.get(0)("id").asInstanceOf[Long]
+        val result2 =  Await.result(connection.sendPreparedStatement("SELECT * FROM test1 WHERE id=?", List(generatedId)), 5 seconds)
+        result2.rows.get(0)("name") mustBe  randomName
+      }
+
+      "Bigserial and Timestamp" - {
+        val configuration = new Configuration("postgres", "postgres", 5432, None, Some("quill_test"))
+        val connection: Connection = new PostgreSQLConnection(configuration)
+        Await.result(connection.connect, 5 seconds)
+        val randomName = Random.nextLong().toString
+        val result1 =  Await.result(connection.sendPreparedStatement("INSERT INTO test1 (name) VALUES(?) RETURNING ID, createdat", List(randomName)), 5 seconds)
+        result1.rows mustNot be(None)
+        val generatedId = result1.rows.get(0)("id").asInstanceOf[Long]
+        val createdAt = result1.rows.get(0)("createdat").asInstanceOf[LocalDateTime]
+
+        val result2 =  Await.result(connection.sendPreparedStatement("SELECT * FROM test1 WHERE id=?", List(generatedId)), 5 seconds)
+        result2.rows.get(0)("name") mustBe  randomName
+        result2.rows.get(0)("createdat") mustBe  createdAt
+      }
+
+      "Sequence and Default text" - {
+        val configuration = new Configuration("postgres", "postgres", 5432, None, Some("quill_test"))
+        val connection: Connection = new PostgreSQLConnection(configuration)
+        Await.result(connection.connect, 5 seconds)
+        val randomName = Random.nextLong().toString
+        val result1 =  Await.result(connection.sendPreparedStatement("INSERT INTO test2 (name) VALUES(?) RETURNING ID, othername", List(randomName)), 5 seconds)
+        result1.rows mustNot be(None)
+        val generatedId = result1.rows.get(0)("id").asInstanceOf[Int]
+        val othername = result1.rows.get(0)("othername").asInstanceOf[String]
+
+        val result2 =  Await.result(connection.sendPreparedStatement("SELECT * FROM test2 WHERE id=?", List(generatedId)), 5 seconds)
+        result2.rows.get(0)("name") mustBe randomName
+        result2.rows.get(0)("othername") mustBe othername
+
+      }
     }
   }
+
+
 }
